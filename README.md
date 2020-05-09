@@ -2,7 +2,10 @@
 
 This is a **Puppeteer** and **NodeJs** automation script for planning the most efficient route to visit all your stopages and reach your destination. It done using - 
 
- - Using Node Puppeteer and chromium library
+ - Using NodeJs, Puppeteer and chromium library
+ 
+ 
+![Nodsjs]( https://encrypted-tbn0.gstatic.com/images?q=tbn%3AANd9GcTUh4-cbw0ynshl2zdb8Z-5TodPTa3Is1FL8e1KBIbNDmiECsZ3&usqp=CAU)
 
 # Prerequisites
 
@@ -11,6 +14,8 @@ Note: When you install Puppeteer, it downloads a recent version of Chromium
 
 A version of Puppeteer that doesn't download Chromium by default.
  `npm i puppeteer-core`
+ 
+
 
 # Command
 To run the script 
@@ -20,3 +25,11 @@ run the bat file with edits
 
 ## Note
 **Enter credentials in 'credentials.json' file and update the moderator ID in '.bat' File before running**
+
+ # Working
+
+ ![location](Screenshots/loaction.json.jpg)
+
+ ![working](Screenshots/Working.jpg)
+
+ ![output](Screenshots/output.jpg)
