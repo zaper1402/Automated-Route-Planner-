@@ -1,0 +1,6 @@
+{
+    "URL":"https://www.google.com/maps/dir///",
+    "startPt": "patparganj",
+    "endPt": "rohini",
+    "stopages": ["paschim vihar","laxmi nagar","cp"]
+}
