@@ -5,15 +5,16 @@ const path = require("path");
 let locFile = process.argv[2];//location file
 let mode = process.argv[3];// mode of commute
 
-let MinRouteArr = [], Mintime = Number.MAX_VALUE, duration;
+let MinRouteArr = [], Mintime = Number.MAX_VALUE, duration,Distance,BestURL;
 (async function ReadCred() {
     try {
         const browser = await puppeteer.launch({
-            headless: false,
+            headless: true,
             defaultViewport: null,
-            slowMo: 20,
+            disableDeviceEmulation: true,
+            slowMo: 5,
 
-            args: ['--start-maximized', '--disable-notifications']
+            // args: ['--start-maximized', '--disable-notifications']
         });
         //read loc file 
         let locFileStr = await fs.promises.readFile(locFile, "utf-8");
@@ -26,6 +27,7 @@ let MinRouteArr = [], Mintime = Number.MAX_VALUE, duration;
         //permutations
         let locPermute = perm(locs);
         console.log("Possible Routes -  "+locPermute.length);
+        // console.table(locPermute);
 
         let i=0;
         
@@ -82,9 +84,10 @@ let MinRouteArr = [], Mintime = Number.MAX_VALUE, duration;
             let sectionArr = await page.$$('div[class="section-directions-trip-numbers"]');
             // await page.waitForSelector(".section-directions-trip-duration span", { visible: true });
             let timeObj = await sectionArr[0].$('.section-directions-trip-duration span');
+            let distObj = await sectionArr[0].$('.section-directions-trip-distance.section-directions-trip-secondary-text div');
             let time = await timeObj.evaluate(el => el.textContent, timeObj);
+            let dist = await distObj.evaluate(el => el.textContent, distObj);
             let time2 = time.replace(/\s/g, '');
-
 
             //time in min
             let timeinMin;
@@ -103,17 +106,38 @@ let MinRouteArr = [], Mintime = Number.MAX_VALUE, duration;
                 MinRouteArr = Route.slice();
                 Mintime = timeinMin;
                 duration = time;
+                Distance = dist;
+                BestURL = page.url();
             }
-            console.log(`Route - ${i} : ` + Route);
-            console.log(`Time - ${i} :  `+ time);
+            console.log(`Route-${i}    : ` + Route);
+            console.log(`Time-${i}     :  `+ time);
+            console.log(`Distance-${i} :  `+ dist);
             console.log("--------------------------------------------------");
             i++;
         }while(i < locPermute.length)
 
-        console.log("Best Route -   "+MinRouteArr);
-        console.log(duration);
+        console.log("Best Route : "+MinRouteArr);
+        console.log("Time       : "+duration);
+        console.log(`Distance   : `+ Distance);
 
+        await browser.close();
 
+        const browser2 = await puppeteer.launch({
+            headless: false,
+            defaultViewport: null,
+            // disableDeviceEmulation: true,
+            slowMo: 5,
+
+            args: ['--start-maximized', '--disable-notifications']
+        });
+
+        let pages2 = await browser2.pages();
+            let page2 = pages2[0];
+            await page2.setDefaultNavigationTimeout(0);
+
+            page2.goto(BestURL, {
+                waitUntil: 'networkidle2'
+            });
 
 
 
