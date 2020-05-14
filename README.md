@@ -1,6 +1,8 @@
 # Automated Route Planner
 
-This is a **Puppeteer** and **NodeJs** automation script for planning the most efficient route to visit all your stopages and reach your destination. It done using - 
+This is a **Puppeteer** and **NodeJs** automation script for planning the most efficient route to visit all your stopages and reach your destination.It automates the process of finding the most optimum route and saves a PDF of its Direction to your disk. 
+
+It done using - 
 
  - Using NodeJs, Puppeteer and chromium library
  
@@ -24,7 +26,7 @@ or
 run the bat file with edits
 
 ## Note
-**Enter credentials in 'credentials.json' file and update the moderator ID in '.bat' File before running**
+**Enter location  in 'location.json' file and update the moderator ID in '.bat' File before running**
 
  # Working
 
