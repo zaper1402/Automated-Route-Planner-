@@ -1,9 +1,13 @@
 const fs = require('fs');
 const puppeteer = require('puppeteer');
 const path = require("path");
+let htmlGenerator = require("./htmlGenerator.js");
 
 let locFile = process.argv[2];//location file
 let mode = process.argv[3];// mode of commute
+
+let commutedetails={};
+let top,right,bottom,left,Mhtml;
 
 let MinRouteArr = [], Mintime = Number.MAX_VALUE, duration,Distance,BestURL;
 (async function ReadCred() {
@@ -12,9 +16,8 @@ let MinRouteArr = [], Mintime = Number.MAX_VALUE, duration,Distance,BestURL;
             headless: true,
             defaultViewport: null,
             disableDeviceEmulation: true,
-            slowMo: 5,
-
-            // args: ['--start-maximized', '--disable-notifications']
+            slowMo: 2,
+            args: ['--start-maximized', '--disable-notifications']
         });
         //read loc file 
         let locFileStr = await fs.promises.readFile(locFile, "utf-8");
@@ -26,8 +29,8 @@ let MinRouteArr = [], Mintime = Number.MAX_VALUE, duration,Distance,BestURL;
 
         //permutations
         let locPermute = perm(locs);
-        console.log("Possible Routes -  "+locPermute.length);
-        // console.table(locPermute);
+        console.log(" Total Possible Routes -  "+locPermute.length);
+        //console.table(locPermute);
 
         let i=0;
         
@@ -47,9 +50,7 @@ let MinRouteArr = [], Mintime = Number.MAX_VALUE, duration,Distance,BestURL;
             let page = pages[0];
             await page.setDefaultNavigationTimeout(0);
 
-            page.goto(URL, {
-                waitUntil: 'networkidle2'
-            });
+            await page.goto(URL, {waitUntil: 'networkidle0'});
 
             await page.waitForSelector("#directions-searchbox-0", { visible: true });
 
@@ -108,10 +109,11 @@ let MinRouteArr = [], Mintime = Number.MAX_VALUE, duration,Distance,BestURL;
                 duration = time;
                 Distance = dist;
                 BestURL = page.url();
+                BestURL = BestURL.slice(0,BestURL.indexOf("@"));
             }
-            console.log(`Route-${i}    : ` + Route);
-            console.log(`Time-${i}     :  `+ time);
-            console.log(`Distance-${i} :  `+ dist);
+            console.log(`Route-${i+1}    : ` + Route);
+            console.log(`Time-${i+1}     :  `+ time);
+            console.log(`Distance-${i+1} :  `+ dist);
             console.log("--------------------------------------------------");
             i++;
         }while(i < locPermute.length)
@@ -119,29 +121,86 @@ let MinRouteArr = [], Mintime = Number.MAX_VALUE, duration,Distance,BestURL;
         console.log("Best Route : "+MinRouteArr);
         console.log("Time       : "+duration);
         console.log(`Distance   : `+ Distance);
-
+        //console.log(`URL        : `+ BestURL);
         await browser.close();
 
         const browser2 = await puppeteer.launch({
             headless: false,
             defaultViewport: null,
-            // disableDeviceEmulation: true,
+            //disableDeviceEmulation: true,
             slowMo: 5,
-
-            args: ['--start-maximized', '--disable-notifications']
+            args: [`--window-size=${1366},${768}`,'--disable-notifications']
+            // args: ['--start-maximized','--disable-notifications' ]
         });
 
         let pages2 = await browser2.pages();
-            let page2 = pages2[0];
-            await page2.setDefaultNavigationTimeout(0);
+        let page2 = pages2[0];
+        await page2.setDefaultNavigationTimeout(0);
+        await page2.goto(BestURL,{waitUntil: 'networkidle0'});
 
-            page2.goto(BestURL, {
-                waitUntil: 'networkidle2'
-            });
+        await page2.waitForSelector('div.section-directions-trip.clearfix',{visible: true});
+        let arr = await page2.$$('div.section-directions-trip.clearfix');
 
+        await page2.waitForSelector('canvas.widget-scene-canvas',{visible: true});
+        const header = await page2.$('canvas.widget-scene-canvas');
+        const rect = await page2.evaluate((header) => {
+          const {top, left, bottom, right} = header.getBoundingClientRect();
+          return {top, left, bottom, right};
+        }, header);
+        
+        const bar = await page2.$('div#omnibox-directions');
+        const barD = await page2.evaluate((bar) => {
+            const {top, left, bottom, right} = bar.getBoundingClientRect();
+            return {top, left, bottom, right};
+          }, bar);
 
+        top = rect.top;
+        bottom = rect.bottom;
+        left = barD.right;
+        right = rect.right;
 
-    } catch (err) {
+        let name = await(await arr[0].$("div.section-directions-trip-description h1.section-directions-trip-title")).getProperty("textContent")
+        name = await name.jsonValue();
+        let summary = await(await arr[0].$("div.section-directions-trip-description div.section-directions-trip-summary")).getProperty("textContent")
+        summary = await summary.jsonValue();
+        let details = await(await arr[0].$("div.section-directions-trip-description div.section-directions-trip-numbers")).getProperty("textContent")
+        details = await details.jsonValue();
+
+        await page2.waitForSelector('button[aria-labelledby=section-directions-trip-details-msg-0]',{visible : true})
+        await page2.click('button[aria-labelledby=section-directions-trip-details-msg-0]');
+
+        commutedetails.name = name.trim();
+        commutedetails.summary = summary.trim();
+        commutedetails.details = details.replace("  Arrive around    Leave around  ","").trim();
+        commutedetails.directions = await getDirections(page2);
+        await page2.screenshot(getOptions(0));
+        commutedetails.map = './Images/screenshot'+0+'.png';
+
+        await fs.promises.writeFile('Directions.json', JSON.stringify(commutedetails));
+
+        Mhtml = htmlGenerator(" Most Optimum Route from " + startPt + " to " + endPt + " via all Intermediate points :")
+        await fs.promises.writeFile('Html.html', Mhtml);
+        
+        let path = __dirname
+        path = path.split('\\').join('/');
+        await browser2.close();
+
+        const browser3 = await puppeteer.launch({
+            headless: true,
+            defaultViewport: null,
+            //disableDeviceEmulation: true,
+            slowMo: 5,
+            args: ['--start-maximized', '--disable-notifications']
+        });
+        let pages3 = await browser3.pages();
+        let page3 = pages3[0];
+        await page3.goto('file://'+ path +'/Html.html',{ waitUntil: 'networkidle0' });
+        await generatePDF(page3);
+        await browser3.close();
+
+    } 
+    catch (err)
+    {
         console.log(err);
     }
 
@@ -150,6 +209,141 @@ let MinRouteArr = [], Mintime = Number.MAX_VALUE, duration,Distance,BestURL;
 
 })();
 
+async function getDirections(page)
+{
+    try
+    {
+        let route = [];
+        await page.waitForSelector('div.directions-mode-nontransit-groups', {visible : true});
+        let divs = await page.$$('div.directions-mode-nontransit-groups div.directions-mode-group');
+        let j = 0;
+        while(j < divs.length)
+        {
+            
+            let sap,div,h2,extra;
+            let cls = await ( await divs[j].getProperty('className') ).jsonValue();
+            if(String(cls).includes("closed"))
+            {
+                let obj = {};
+                h2 = await divs[j].$("div.directions-mode-group-summary h2.directions-mode-group-title")
+                h2 = await ( await h2.getProperty('textContent') ).jsonValue()
+                sap = await divs[j].$("div.directions-mode-group-summary div.directions-mode-separator")
+                sap = await ( await sap.getProperty('textContent') ).jsonValue()
+                obj.heading = h2.trim();
+                obj.details = sap.trim();
+                await divs[j].click();
+                obj.steps = await getSteps(divs[j]);
+                route.push(obj);
+            }
+            else
+            {
+                nodivs = await divs[j].$$(" div.directions-non-hideable-group div.directions-mode-step-container");
+                for(let i=0;i<nodivs.length;i++)
+                {
+                    let obj = {};
+                    div = await nodivs[i].$("div.directions-mode-step div.directions-mode-step-summary div.numbered-step");
+                    div = await ( await div.getProperty('textContent') ).jsonValue();
+                    sap = await nodivs[i].$("div.directions-mode-step div.directions-mode-separator div.directions-mode-distance-time");
+                    sap = await ( await sap.getProperty('textContent') ).jsonValue();
+                    extra = await nodivs[i].$(" div.directions-mode-step div.directions-mode-step-summary div.dirsegnote");
+                    extra = await ( await extra.getProperty('textContent') ).jsonValue();
+                    obj.heading = div.trim();
+                    obj.details = sap.trim();
+                    if(extra != null && extra.trim().length > 0)
+                    {
+                        obj.extra = extra.replace("Confidential","").trim();
+                    }
+                    route.push(obj);
+                }    
+            }
+
+            j++;
+        }
+
+        return route;
+    }
+    catch(err)
+    {
+        console.log(err)
+    }
+}
+
+async function getSteps(div)
+{
+    try{
+        let arr = []
+        steps = await div.$$("div.hideable.expand-print.padded-hideable div.directions-mode-step-container ")
+        let i = 0
+        while(i < steps.length)
+        {
+            let div , sap , extra
+            let obj = {}
+            div = await steps[i].$(" div.directions-mode-step-summary div.numbered-step")
+            div = await ( await div.getProperty('textContent') ).jsonValue()
+            extra = await steps[i].$(" div.directions-mode-step-summary div.dirsegnote")
+            extra = await ( await extra.getProperty('textContent') ).jsonValue()
+            sap = await steps[i].$$("div.directions-mode-separator")
+            sap = await ( await sap[1].getProperty('textContent') ).jsonValue()
+            obj.heading = div.trim()
+            obj.details = sap.trim()
+            if(extra != null && extra.trim().length > 0)
+            obj.extra = extra.replace("Confidential","").trim()
+            arr.push(obj)
+            i++
+        }
+
+        return arr
+    }
+    catch(err)
+    {
+        console.log(err)
+    }
+}
+
+function getOptions(i)
+{
+    if (!fs.existsSync('./Images')){
+        fs.mkdirSync('./Images')
+    }
+let options = {
+    path: './Images/screenshot'+i+'.png',  // set's the name of the output image'
+    fullPage: false,
+    // dimension to capture
+    clip: {      
+        x: left,  // x coordinate
+        y: top,   // y coordinate
+        width: right,      // width
+        height: bottom  // height
+    },
+    omitBackground: true
+  }
+return options
+}
+
+async function generatePDF(page) {
+
+    try
+    {
+    const pdfConfig = {
+        path: 'Most-Optimum-Route.pdf',  
+        format: 'A4',
+        printBackground: true,
+        margin: { 
+            top: '1.00cm',
+            bottom: '1.00cm',
+            left: '0.20cm',
+            right: '0.60cm'
+        }
+    };
+    await page.emulateMedia('screen');
+    const pdf = await page.pdf(pdfConfig); 
+    return pdf
+    }
+    catch(err)
+    {
+        console.log(err)
+    }
+}
 
 async function addStops(page, stop, idx) {
     try{
@@ -166,6 +360,7 @@ async function addStops(page, stop, idx) {
     await page.click(`#directions-searchbox-${idx} input`);
     await page.keyboard.type(stop);
     await page.keyboard.press('Enter');
+    
     }catch(err){
 
     }
